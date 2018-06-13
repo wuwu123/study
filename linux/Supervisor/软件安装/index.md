@@ -20,6 +20,16 @@ mkdir /etc/supervisor
 echo_supervisord_conf > /etc/supervisor/supervisord.conf
 ```
 
+### 基本命令
+```
+启动
+supervisord -c /etc/supervisor/supervisord.conf
+关闭
+supervisorctl shutdown
+重新加载配置
+supervisorctl reload
+```
+
 ### 报警配置,[php报警项目地址](./../supervisor.zip)
 ```
 [eventlistener:listener]
