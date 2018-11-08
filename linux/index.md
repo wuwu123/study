@@ -5,6 +5,9 @@
 ### centos7防火墙
 
 ```
+yum install firewalld firewall-config
+systemctl unmask firewalld.service
+systemctl start  firewalld
 firewall-cmd --reload
 
 添加端口
@@ -23,4 +26,3 @@ firewall-cmd --query-port=3306/tcp
 ```
 lsb_release -a
 ```
-
