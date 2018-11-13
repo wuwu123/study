@@ -188,7 +188,7 @@ docker run --name webserver -d -p 80:80 nginx
 docker exec -it webserver bash
 ```
 
-### Dockerfile
+### 制作镜像案例 Dockerfile
 
 Dockerfile 是一个文本文件，其内包含了一条条的指令(Instruction)，每一条指令构建一层，因此每一条指令的内容，就是描述该层应当如何构建
 
@@ -199,6 +199,7 @@ touch Dockerfile
     内容
     FROM nginx
     RUN echo '<h1>Hello, Docker!</h1>' > /usr/share/nginx/html/index.html
+
 docker build -t nginx:v3 .
 
 最终镜像的名称 -t nginx:v
@@ -227,6 +228,16 @@ RUN ["可执行文件", "参数1", "参数2"]
 将多层镜像合并成一层
 RUN buildDeps='gcc libc6-dev make' \
     && apt-get update
+
+
+错误案例：
+
+RUN cd /app
+RUN echo "hello" > world.txt
+并不会向 /app/world.txt 写入数据
+
+原因
+第一层 RUN cd /app 的执行仅仅是当前进程的工作目录变更，一个内存上的变化而已，其结果不会造成任何文件变更。而到第二层的时候，启动的是一个全新的容器，跟第一层的容器更完全没关系，自然不可能继承前一层构建过程中的内存变化。
 ```
 
 ##### COPY
@@ -251,6 +262,92 @@ ADD ubuntu-xenial-core-cloudimg-amd64-root.tar.gz /home
 ADD --chown=10:11 files* /mydir/
 ```
 
+##### CMD ，ENTRYPOINT 容器启动命令
+
+
+##### ENV
+
+定于环境变量
+
+```
+ENV NODE_VERSION 7.2.0
+RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz"
+```
+
+##### WORKDIR 指定工作目录
+
+
+##### WORKDIR 指定工作目录
+
+##### USER 指定当前用户
+
+```
+RUN groupadd -r redis && useradd -r -g redis redis
+USER redis
+RUN [ "redis-server" ]
+
+
+# 建立 redis 用户，并使用 gosu 换另一个用户执行命令
+RUN groupadd -r redis && useradd -r -g redis redis
+# 下载 gosu
+RUN wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.7/gosu-amd64" \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true
+# 设置 CMD，并以另外的用户执行
+CMD [ "exec", "gosu", "redis", "redis-server" ]
+```
+
+##### HEALTHCHECK 健康检查
+
+
+##### ONBUILD 当前镜像不执行，当已当前镜像为基础取建立镜像的时候才去执行
+
+
+## 容器
+
+### 启动
+
+docker run
+
+执行的步骤
+
+1. 检查本地是否存在指定的镜像，不存在就从公有仓库下载
+2. 利用镜像创建并启动一个容器
+3. 分配一个文件系统，并在只读的镜像层外面挂载一层可读写层
+4. 从宿主主机配置的网桥接口中桥接一个虚拟接口到容器中去
+5. 从地址池配置一个 ip 地址给容器
+6. 执行用户指定的应用程序
+7. 执行完毕后容器被终止
+
+### 命令
+
+```
+显示容器列表
+docker container ls
+
+删除容器
+docker container rm  nginxvim
+
+清空不在运行的容器
+docker container prune
+
+```
+
+### 查看映射端口配置
+
+docker port webserver1 80
+
+
+### 查看运行时的log
+
+ docker logs -f webserver1
+
+![port 映射](http://img.hdphp.cc/40c8232af392e9c4e5d7c3e3308a6aa5.png)
+
+
+
 ### 学习地址
 [书籍](https://yeasy.gitbooks.io/docker_practice/content/image/list.html)
 [命令](https://blog.csphere.cn/archives/22)
+
+export PATH=$PATH:/usr/local/opt/go/libexec/bin
