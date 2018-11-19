@@ -74,6 +74,301 @@ Consumer收到消息时需要显式的向rabbit broker发送basic.ack消息或�
 * rabbitmq2.0.0和之后的版本支持consumer reject某条（类）消息，可以通过设置requeue参数中的reject为true达到目地，那么rabbitmq将会把消息发送给下一个注册的consumer。
 
 
+### PHP 看到封装php
+
+```php
+
+class CAmqp
+{
+
+    /**
+     * @var AMQPStreamConnection
+     */
+    protected $client = null;
+
+    /**
+     * @var AMQPChannel
+     */
+    protected $channel = null;
+
+    protected $queue;
+    protected $exchange;
+    protected $routing_key;
+
+    private static $running = true;
+
+    public function __construct()
+    {
+        try {
+            $this->client = bean(BaseAmqp::class)->getConnect();
+            $this->channel = $this->client->channel();
+        } catch (\Exception $e) {
+            throw new \Exception("Error Processing Request", 1);
+        }
+    }
+
+    /**
+     * direct 类型消息
+     *
+     * @param  [type] $exchange   [description]
+     * @param  [type] $routingKey [description]
+     * @param  [type] $queue      [description]
+     * @return [type]             [description]
+     */
+    public function direct($exchange, $routingKey, $queue)
+    {
+        return $this->exchangeToQueue($exchange, $routingKey, $queue, 'direct');
+    }
+
+    /**
+     * topic 类型消息
+     *
+     * @param  [type] $exchange   [description]
+     * @param  [type] $routingKey [description]
+     * @param  string $queue [description]
+     * @return [type]             [description]
+     */
+    public function topic($exchange, $routingKey, $queue = '')
+    {
+        return $this->exchangeToQueue($exchange, $routingKey, $queue, 'topic');
+    }
+
+    protected function exchangeToQueue($exchange, $routingKey, $queue = '', $type)
+    {
+        $this->exchange = $exchange;
+        $this->routing_key = $routingKey;
+        $this->queue = $queue;
+
+        $this->channel->exchange_declare($exchange, $type, false, true, false);
+        if ($queue) {
+            $this->queue($queue, $routingKey);
+        }
+        return $this;
+    }
+
+
+    /**
+     * @brief Declares a new Queue on the broker
+     * @param $name
+     * @param $flags
+     */
+    protected function queue($queue, $flags = NULL)
+    {
+        /**
+         * queue: $queue
+         * passive: false
+         * durable: true // the queue will survive server restarts
+         * exclusive: false // the queue can be accessed in other channels
+         * auto_delete: false //the queue won't be deleted once the channel is closed.
+         */
+        $ha_connection = array(
+            'x-ha-policy' => array(
+                'S', 'all'
+            ),
+        );
+        $this->channel->queue_declare($queue, false, true, false, false, false, $ha_connection);
+        $this->channel->queue_bind($queue, $this->exchange, $this->routing_key);
+
+        $this->queue = $queue;
+        return $this;
+    }
+
+
+    /**
+     * 提交消息
+     *
+     * @param  [type]  $msg_body  [description]
+     * @param  boolean $isConfirm [description]
+     * @return [type]             [description]
+     */
+    public function publish($msg_body, $isConfirm = false)
+    {
+        static $hasConfirm = false;
+        if ($isConfirm && $hasConfirm == false) {
+            $this->channel->tx_select();
+            $hasConfirm = true;
+        }
+        $msg = new AMQPMessage($msg_body, array('content_type' => 'text/plain', 'delivery_mode' => 2));
+        $this->channel->basic_publish($msg, $this->exchange, $this->routing_key);
+        if ($isConfirm) {
+            $this->channel->tx_commit();
+        }
+    }
+
+    /**
+     * 批量提交信息
+     *
+     * @param  [type]  $msg_bodys [description]
+     * @param  boolean $isConfirm [description]
+     * @return [type]             [description]
+     */
+    public function publishBatch($msg_bodys, $isConfirm = false)
+    {
+        static $hasConfirm = false;
+        if ($isConfirm && $hasConfirm == false) {
+            $this->channel->tx_select();
+            $hasConfirm = true;
+        }
+
+        foreach ($msg_bodys as $msg_body) {
+            $msg = new AMQPMessage($msg_body, array('content_type' => 'text/plain', 'delivery_mode' => 2));
+            $this->channel->batch_basic_publish($msg, $this->exchange, $this->routing_key);
+        }
+        $this->channel->publish_batch();
+
+        if ($isConfirm) {
+            $this->channel->tx_commit();
+        }
+    }
+
+    /**
+     * 根据回调函数处理队列
+     *
+     * @param $call_func
+     * @param null $signalFunc
+     * @throws \Exception
+     */
+    public function consume($call_func, $signalFunc = null)
+    {
+        declare(ticks=1);
+        $signHandler = function () use ($signalFunc) {
+            self::$running = false;
+            //执行外部函数
+            if ($signalFunc) {
+                call_user_func($signalFunc);
+            }
+        };
+        if (function_exists('pcntl_signal')) {    //window下测试有问题
+            pcntl_signal(SIGINT, $signHandler);
+            pcntl_signal(SIGQUIT, $signHandler);
+            pcntl_signal(SIGTERM, $signHandler);
+            pcntl_signal(SIGTSTP, $signHandler);
+        }
+        try {
+            $this->channel->basic_consume($this->queue, $this->routing_key, false, false, false, false, $call_func);
+            while (self::$running && count($this->channel->callbacks)) {
+                $this->channel->wait();
+            }
+        } catch (\Exception $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * 消费成功后，删除队列
+     *
+     * @param type $msg
+     */
+    public function consumeQueue(AMQPMessage $msg)
+    {
+        try {
+            $this->channel->basic_ack($msg->delivery_info['delivery_tag']);
+        } catch (\Exception $e) {
+        }
+    }
+
+    /**
+     * 当前consumer不处理，交由另外一个consumer处理
+     *
+     * @param type $msg
+     */
+    public function rejectQueue(AMQPMessage $msg)
+    {
+        try {
+            $this->channel->basic_reject($msg->delivery_info['delivery_tag'], true);
+        } catch (\Exception $e) {
+            // echo $e->getMessage();
+        }
+    }
+
+    public function isConnected()
+    {
+        return $this->client->isConnected();
+    }
+
+    public function __destruct()
+    {
+        try {
+            if ($this->client) {
+                $this->client->close();
+                $this->channel->close();
+            }
+        } catch (\Exception $e) {
+        }
+    }
+}
+
+
+class BaseAmqp
+{
+    private $connect;
+    private $config;
+    private $connectNum = 0;
+
+    public function getConnect()
+    {
+        try {
+            if (!$this->connect) {
+                $this->connect = new AMQPStreamConnection($this->getHost(), $this->getPost(), $this->getUser(), $this->getPassword(), $this->getVhost());
+            }
+            if (!$this->connect || !$this->connect->isConnected()) {
+                throw new HttpServerException(ErrorCode::$ENUM_AMQP_CONNECT_INVALID);
+            }
+            $this->connectNum = 0;
+        } catch (HttpServerException $e) {
+            $this->connect = false;
+            $this->connectNum++;
+            if ($this->connectNum > 1) {
+                throw new HttpServerException(ErrorCode::$ENUM_AMQP_CONNECT_INVALID);
+            }
+            $this->getConnect();
+        }
+        return $this->connect;
+    }
+
+    public function getHost()
+    {
+        return $this->getConfig()["host"] ?? "";
+    }
+
+    public function getPost()
+    {
+        return $this->getConfig()["post"] ?? "";
+    }
+
+    public function getUser()
+    {
+        return $this->getConfig()["login"] ?? "";
+    }
+
+    public function getPassword()
+    {
+        return $this->getConfig()["password"] ?? "";
+    }
+
+    public function getVhost()
+    {
+        return $this->getConfig()["vhost"] ?? "";
+    }
+
+    public function getConfig()
+    {
+        if (!$this->config) {
+            $this->config = array(
+                'host' => env('AMQP_HOST'),
+                'port' => env('AMQP_PORT'),
+                'login' => env('AMQP_LOGIN'),
+                'password' => env('AMQP_PASSWORD'),
+                'vhost' => env('AMQP_VHOST')
+            );
+        }
+        return $this->config;
+    }
+
+}
+```
+
+
 
 ### 学习参考地址
 [简单明了](https://www.cnblogs.com/jun-ma/p/4840869.html)
