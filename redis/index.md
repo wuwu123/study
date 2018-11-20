@@ -8,6 +8,12 @@ ip限制
     bind 127.0.0.1
 ```
 
+## docker 密码启动
+
+```
+docker run -d --name redis -p 6379:6379 redis --requirepass "wujie123"
+
+```
 ## 清空数据
 
 ```
