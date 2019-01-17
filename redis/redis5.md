@@ -45,7 +45,6 @@ xadd streamkey * key valyue
 
 ```
 
-
 ### 参考学习地址
 
 [源码分析](http://chenzhenianqing.com/articles/1622.html)
