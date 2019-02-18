@@ -346,8 +346,7 @@ docker port webserver1 80
 
 
 
+
 ### 学习地址
 [书籍](https://yeasy.gitbooks.io/docker_practice/content/image/list.html)
 [命令](https://blog.csphere.cn/archives/22)
-
-export PATH=$PATH:/usr/local/opt/go/libexec/bin

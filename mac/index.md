@@ -2,9 +2,12 @@
 
 ```
 http://idea.congm.in
+
 ```
 
-## 写mackdown
+
+
+## mackdown
 
 ### typore
 
@@ -22,3 +25,14 @@ http://idea.congm.in
 ```
 * 备注
 [图片配置参考](https://segmentfault.com/a/1190000012291863)
+
+
+
+### fish配置
+
+```
+fish_config
+
+选择颜色主题
+```
+
