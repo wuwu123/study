@@ -19,10 +19,19 @@ firewall-cmd --query-port=3306/tcp
 
 
 
-
-
 ### 查看服务器版本
 
 ```
 lsb_release -a
 ```
+
+
+
+
+
+### 查看配置文件加载顺序
+
+```
+echo $PATH	
+```
+
