@@ -170,6 +170,12 @@ must_not不匹配
 
 
 
+### [查询优化]([http://arganzheng.life/deep-pagination-in-elasticsearch.html](http://arganzheng.life/deep-pagination-in-elasticsearch.html))
+
+1.  from size
+2.  服务端缓存 Scan and scroll API
+3.  search after
+
 ### 学习地址
 
 [基础介绍](https://blog.csdn.net/laoyang360/article/details/52244917)
